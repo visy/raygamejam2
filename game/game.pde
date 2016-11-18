@@ -105,11 +105,12 @@ void drawBG() {
   color[] colors = {pastel1,pastel2,pastel3,pastel4};
   background(colors[level]);
   
-  stroke(0);
+  stroke(255);
   noFill();
-  
-  float[] dsh = {5, 3, 9, 4};
-  dashline(width/2,0,width/2,height,dsh);
+  strokeWeight(8);
+  float[] dsh = {5, 15, 9, 4};
+  float offy = int(millis()*0.1) % 34 ;
+  dashline(width/2,-32+offy,width/2,height+32+offy,dsh);
 
   
 
