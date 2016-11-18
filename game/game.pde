@@ -1,5 +1,4 @@
-
-//import android.view.MotionEvent;
+import android.view.MotionEvent;
 
 float sw, sh, touchX, touchY;
 ArrayList points;
@@ -8,14 +7,14 @@ PFont f;
 int level = 0;
 
 void setup() {
-  size(1280, 720);  
+  size(displayWidth, displayHeight);  
 
-  sw = 1280;  
-  sh = 720;
+  sw = displayWidth;  
+  sh = displayHeight;
   points = new ArrayList();
   
-  f = createFont("Arial", 24);  
- 
+  f = createFont("System", 72);  
+
   resetGame();
 }
 
@@ -103,8 +102,15 @@ void drawBG() {
   color pastel3 = color(255,137,181);
   color pastel4 = color(137,140,255);
   color[] colors = {pastel1,pastel2,pastel3,pastel4};
-  background(colors[level]);
-  
+
+  noStroke();
+
+  fill(colors[level]);
+  rect(0,0,width/2,height);
+
+  fill(colors[(level+1)%colors.length]);
+  rect(width/2,0,width/2,height);
+
   stroke(255);
   noFill();
   strokeWeight(8);
@@ -131,17 +137,33 @@ void drawShapes() {
   }
 }
 
+void drawText() {
+  pushMatrix();
+  noStroke();
+  textAlign(CENTER,CENTER);
+  textSize(160);
+  translate(width/2,height/2);
+  scale(1.0+cos(millis()*0.01)*0.2);
+  fill(0);
+  text("LEVEL 1",2,2);
+  fill(230);
+  text("LEVEL 1",0,0);
+  translate(-width/2,-height/2);
+  popMatrix();  
+}
+
 void draw() {
-  touchEmu();
+//  touchEmu();
   drawBG();
   drawShapes();
+  drawText();
   
   touchLogic();
   
 
 }
 
-/*
+
 public boolean surfaceTouchEvent(MotionEvent event) {
   int pointerCount = event.getPointerCount();
   points.clear();
@@ -158,4 +180,3 @@ public boolean surfaceTouchEvent(MotionEvent event) {
   return super.surfaceTouchEvent(event);
 
 }
-*/
