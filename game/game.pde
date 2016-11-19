@@ -1,10 +1,29 @@
 import android.view.MotionEvent;
+import cassette.audiofiles.SoundFile;
+import java.lang.reflect.Field;
+import android.media.MediaPlayer;
 
 float sw, sh, touchX, touchY;
 ArrayList points;
 PFont f;
 
 int level = 0;
+SoundFile music = null;
+
+float level_starttime = 0.0;
+float level_time = 0.0;
+float music_time = 0.0;
+
+float dt = 0.0;
+
+float beat_starttime = 0.0;
+float next_beat = 0.0;
+int level_beatcounter = 0;
+
+float sport_song_bpm = 175.0;
+float sport_song_bps = 60. /sport_song_bpm;
+
+float bg_flash = 1.0;
 
 void setup() {
   size(displayWidth, displayHeight);  
@@ -21,6 +40,16 @@ void setup() {
 void resetGame() {
   level = 0;
   points.clear();
+  resetLevel();
+}
+
+void resetLevel() {
+  if (music != null) music.stop();
+  music = new SoundFile(this, "sport.mp3");
+  music.play();
+  level_time = 0.0;
+  next_beat = 0.0;
+  level_starttime = millis();
 }
 
 void touchEmu() {
@@ -97,14 +126,18 @@ void dashline(float x0, float y0, float x1, float y1, float[ ] spacing)
  
 void drawBG() {
 
-  color pastel1 = color(237,109,121);
-  color pastel2 = color(218,151,224);
-  color pastel3 = color(255,137,181);
-  color pastel4 = color(137,140,255);
+  if (bg_flash > 1.0) bg_flash-=dt*0.005;
+  if (bg_flash <= 1.0) bg_flash = 1.0;
+
+  color pastel1 = color(237*bg_flash,109*bg_flash,121*bg_flash);
+  color pastel2 = color(218*bg_flash,151*bg_flash,224*bg_flash);
+  color pastel3 = color(255*bg_flash,137*bg_flash,181*bg_flash);
+  color pastel4 = color(137*bg_flash,140*bg_flash,255*bg_flash);
   color[] colors = {pastel1,pastel2,pastel3,pastel4};
 
   noStroke();
 
+  
   fill(colors[level]);
   rect(0,0,width/2,height);
 
@@ -138,28 +171,69 @@ void drawShapes() {
 }
 
 void drawText() {
+  
+  // intro text on level
+  if (level_time > 1000. && level_time < 4000.) {
+    pushMatrix();
+      noStroke();
+      textAlign(CENTER,CENTER);
+      textSize(160);
+      translate(width/2,height/2);
+      scale(1.0+cos(millis()*0.005)*0.1);
+      fill(0);
+      text("LEVEL 1",4,4);
+      fill(230);
+      text("LEVEL 1",0,0);
+      translate(-width/2,-height/2);
+    popMatrix();  
+  }
+
+
   pushMatrix();
-  noStroke();
-  textAlign(CENTER,CENTER);
-  textSize(160);
-  translate(width/2,height/2);
-  scale(1.0+cos(millis()*0.01)*0.2);
-  fill(0);
-  text("LEVEL 1",2,2);
-  fill(230);
-  text("LEVEL 1",0,0);
-  translate(-width/2,-height/2);
+    noStroke();
+    textAlign(CENTER,CENTER);
+    textSize(60);
+    translate(width/2,height-100);
+    fill(0);
+    text(""+music_time,4,4);
+    fill(230);
+    text(""+music_time,0,0);
+    translate(-width/2,-height-100);
   popMatrix();  
 }
 
+void levelLogic() {
+  level_time = millis()-level_starttime;
+  try {
+    Field f = music.getClass().getDeclaredField("player"); //NoSuchFieldException
+    f.setAccessible(true);
+    MediaPlayer mp = (MediaPlayer) f.get(music);
+    music_time = mp.getCurrentPosition() * 1.0;
+    if (music_time > 0. && next_beat == 0.0) {
+      next_beat = sport_song_bps*16.*512.;
+    }
+} catch (Exception e) {}
+
+  // beat trig
+  if (music_time >= next_beat && next_beat != 0.0) {
+    beat_starttime = music_time;
+    next_beat = beat_starttime+(sport_song_bps*16.*512.);
+    bg_flash = 1.8;
+    
+  }
+}
+
 void draw() {
-//  touchEmu();
+  dt = (millis()-level_starttime)-level_time;
+
+  //  touchEmu();
   drawBG();
   drawShapes();
   drawText();
   
   touchLogic();
-  
+  levelLogic(); 
+
 
 }
 
