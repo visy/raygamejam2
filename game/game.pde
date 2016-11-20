@@ -1,7 +1,5 @@
 import android.view.MotionEvent;
 import cassette.audiofiles.SoundFile;
-import java.lang.reflect.Field;
-import android.media.MediaPlayer;
 
 float sw, sh, touchX, touchY;
 ArrayList points;
@@ -25,6 +23,9 @@ PImage image_heart;
 
 PImage image_kisu11;
 PImage image_kisu12;
+
+PImage image_logo;
+PImage image_title;
 
 float game_starttime = 0.0;
 float game_time = 0.0;
@@ -111,7 +112,7 @@ class Entity {
       return false;
     }
 
-    if (type >= TYPE_HALF11 && dist(x,y,tx,ty)<height/8) { last_tx = tx; last_ty = ty; drag = true; if (type == TYPE_HALF11) isdragging1 = true; if (type == TYPE_HALF12) isdragging2 = true; if (x < width/2) dragside = 0; else dragside = 1; return true; }
+    if (type >= TYPE_HALF11 && dist(x,y,tx,ty)<height/8) { last_tx = tx; last_ty = ty; drag = true; if (type == TYPE_HALF11) isdragging1 = true; if (type == TYPE_HALF12) isdragging2 = true; if (x < width/2 && dragside == -1) dragside = 0; if (x > width/2 && dragside == -1) dragside = 1; return true; }
 
     
     
@@ -189,8 +190,8 @@ class Entity {
       y+=ys;
     }
 
-    if (drag && dragside == 0 && x >= width/2-16) {drag = false; locked = true; isdragging1 = false; x = width/2; }
-    if (drag && dragside == 1 && x <= width/2+16) {drag = false; locked = true; isdragging2 = false; x = width/2; }
+    if (drag && dragside == 0 && x >= width/2-16) {drag = false; locked = true; isdragging1 = false; }
+    if (drag && dragside == 1 && x <= width/2+16) {drag = false; locked = true; isdragging2 = false; }
     
     if (locked == true) return;    
    
@@ -278,11 +279,15 @@ void setup() {
   image_kisu11 = loadImage("kisu1_1.png");
   image_kisu12 = loadImage("kisu1_2.png");
 
+  image_logo = loadImage("logo.png");
+  image_title = loadImage("title.png");
+
   meow = new SoundFile(this, "meow.ogg");
   pop = new SoundFile(this, "pop.ogg");
   boom = new SoundFile(this, "boom.ogg");
   coin = new SoundFile(this, "coin.ogg");
 
+  noSmooth();
   resetGame();
 }
 
@@ -342,13 +347,15 @@ void touchLogic() {
         if (ent.drag) {
           if ((ent.dragside == 0 && ent.x < width/2) || (ent.dragside == 1 && ent.x > width/2)) { 
             if (dist(ent.x,ent.y,tx,ty) > height/6) { 
+              ent.drag = false;
               if (ent.dragside == 0) isdragging1 = false;
               if (ent.dragside == 1) isdragging2 = false;
-              ent.drag = false;
             }
             else {
               ent.x = tx;
               ent.y = ty;
+              if (ent.dragside == 0 && ent.x > width/2) ent.x = width/2;
+              if (ent.dragside == 1 && ent.x < width/2) ent.x = width/2;
             }
           }
         }
@@ -534,26 +541,31 @@ void drawText() {
   textAlign(CENTER,CENTER);
   text(int(paircount),80,80);  
 
+  imageMode(CENTER);
 
   // logo
   if (gamestarttimer >= 0.0 && gamestarttimer < 2.5) {
     background(255);
+    image(image_logo,width/2,height/2);
+
+    stroke(0);
     fill(0);
-    textSize(240);
-    textAlign(CENTER,CENTER);
-    text("NOVEL AMUSEMENTS",width/2,height/2);
+    
+    textSize(80);
+    text("designed by Heini Natri and Visa-Valtteri Pimiä",width/2,height-200);
+    text("code by visy",width/2,height-160);
+    text("graphics by Heini",width/2,height-120);
+    text("music by mathgrant (CC)",width/2,height-80);
   }
 
   if (gamestarttimer >= 2.5 && gamestarttimer < 5.0) {
-    background(0);
-    fill(255);
-    textSize(240);
-    textAlign(CENTER,CENTER);
-    text("HALF N HALF",width/2,height/2);
+    background(255);
+    image(image_title,width/2,height/2);
   }
 }
 
 int spawnside = -1;
+float spawntime = 0.0;
 
 void levelLogic() {
   level_time = millis()-level_starttime;
@@ -577,18 +589,11 @@ void levelLogic() {
 
   }  
   
-  try {
-    Field f = music.getClass().getDeclaredField("player"); //NoSuchFieldException
-    f.setAccessible(true);
-    MediaPlayer mp = (MediaPlayer) f.get(music);
-    music_time = mp.getCurrentPosition() * 1.0;
-    if (music_time > 0. && next_beat == 0.0) {
-      next_beat = sport_song_bps*16.*512.;
-    }
-} catch (Exception e) {}
+  spawntime += dt*0.005;
 
   // beat trig
-  if (music_time >= next_beat && next_beat != 0.0) {
+  if (spawntime > abs((5.0-(level*0.5)))) {
+    spawntime = 0.;
     beat_starttime = music_time;
     next_beat = beat_starttime+(sport_song_bps*16.*512.);
 
