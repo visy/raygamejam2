@@ -8,7 +8,16 @@ ArrayList points;
 PFont f;
 
 int level = 0;
+float paircount = 0;
+
 SoundFile music = null;
+SoundFile meow = null;
+SoundFile pop = null;
+SoundFile boom = null;
+SoundFile coin = null;
+
+boolean isdragging1 = false;
+boolean isdragging2 = false;
 
 PImage image_bomb;
 PImage image_coin;
@@ -16,6 +25,9 @@ PImage image_heart;
 
 PImage image_kisu11;
 PImage image_kisu12;
+
+float game_starttime = 0.0;
+float game_time = 0.0;
 
 float level_starttime = 0.0;
 float level_time = 0.0;
@@ -29,11 +41,13 @@ int level_beatcounter = 0;
 int life = 0;
 int score = 0;
 
-float sport_song_bpm = 175.0;
+float sport_song_bpm = 175.0*1.5;
 float sport_song_bps = 60. /sport_song_bpm;
 
 float bg_flash = 1.0;
 int dmg_flash = 0;
+
+int game_init = 0;
 
 static int TYPE_BUBBLE = 0;
 static int TYPE_BOMB = 1;
@@ -53,6 +67,10 @@ class Entity {
   float poptimer;
   float exptimer;
   boolean drag = false;
+  boolean locked = false;
+  boolean foundpair = false;
+  float pairtimer = 0.0;
+  int dragside = -1;
   int type = 0;
   int contains; // -1 = nothing, ie. not a bubble!
   boolean alive;
@@ -71,6 +89,9 @@ class Entity {
     
     exptimer = 5.0;
     drag = false;
+    locked = false;
+    foundpair = false;
+    dragside = -1;
   }
 
   boolean hit(float tx, float ty) {
@@ -82,13 +103,24 @@ class Entity {
 
     if (type == TYPE_BUBBLE && dist(x,y,tx,ty)<height/8) return true;
     if (type != TYPE_BUBBLE && type < TYPE_HALF11 && dist(x,y,tx,ty)<height/10) { return true; }
-    if (type >= TYPE_HALF11 && dist(x,y,tx,ty)<height/8) { last_tx = tx; last_ty = ty; drag = true; return true; }
+
+    if (isdragging1 && dragside == 0) { 
+      return false;
+    }
+    if (isdragging2 && dragside == 1) { 
+      return false;
+    }
+
+    if (type >= TYPE_HALF11 && dist(x,y,tx,ty)<height/8) { last_tx = tx; last_ty = ty; drag = true; if (type == TYPE_HALF11) isdragging1 = true; if (type == TYPE_HALF12) isdragging2 = true; if (x < width/2) dragside = 0; else dragside = 1; return true; }
+
     
     
     return false;
   }
   
   void die() {
+    if (dragside == 0) isdragging1 = false;
+    if (dragside == 1) isdragging2 = false;
     alive = false;
   }
 
@@ -100,23 +132,26 @@ class Entity {
 
     if (type == TYPE_BUBBLE) {
       type = contains;
+      pop.play();
     } else {
       if (type == TYPE_BOMB) {
         life--;
         bg_flash = 2.0;
         dmg_flash = 1;
-
+        boom.play();
         die();
         return true;
       }
       else if (type == TYPE_COIN) {
         score+=100;
+        coin.play();
         die();        
         return true;
       }
       else if (type == TYPE_HEART) {
         score+=15;
         life++;
+      pop.play();
         if (life >= 3) life = 3;
         die();        
         return true;
@@ -132,14 +167,33 @@ class Entity {
 
   void update() {
     if (alive == false) return;
+
+    if (dragside == 0 && x > width/2) x = width/2;
+    if (dragside == 1 && x < width/2) x = width/2;
+  
+    if (foundpair) {
+      pairtimer += dt * 0.001;
+      if (pairtimer > 1.0) { score += 500; paircount-=0.5; }
+      if (paircount <= 0) { level++; resetLevel(); } 
+      die();
+      return;
+    }
+    if (exptimer > 0. && type != TYPE_BUBBLE) exptimer -= dt*0.001;
+    if (exptimer <= 0.) alive = false;
+
+    if (locked == true) {
+      return;
+    }
     if (type == TYPE_BUBBLE) {
       x+=xs;
       y+=ys;
     }
+
+    if (drag && dragside == 0 && x >= width/2-16) {drag = false; locked = true; isdragging1 = false; x = width/2; }
+    if (drag && dragside == 1 && x <= width/2+16) {drag = false; locked = true; isdragging2 = false; x = width/2; }
     
-    if (exptimer > 0. && type != TYPE_BUBBLE) exptimer -= dt*0.001;
-    if (exptimer <= 0.) alive = false;
-    
+    if (locked == true) return;    
+   
     if (poptimer > 0.) poptimer -= dt*0.02;
   }
   
@@ -161,6 +215,22 @@ class Entity {
       ellipse(x,y,height/4+sin(millis()*0.004+x)*16,height/4+cos(millis()*0.0052+x)*16);
     }
 
+    if (drag == true) {
+      strokeWeight(6);
+      stroke(255,255,0);
+      noFill();
+      if (foundpair) stroke(0,255,0); 
+      ellipse(x,y,height/4,height/4);
+
+    }
+
+    if (foundpair) {
+      strokeWeight(12);
+      stroke(0,255,0); 
+      noFill();
+      ellipse(x,y,height/4,height/4);
+    }
+
     imageMode(CENTER);
 
     float xo = 0.0;
@@ -169,12 +239,13 @@ class Entity {
     pushMatrix();
     if (type == TYPE_BUBBLE) {
       yo = cos(millis()*0.002)*16;
-    } else {
-      translate(x,y);
-      rotate(cos(millis()*0.004)*PI/16);
-      translate(-x,-y);
     }
-    
+
+    translate(x,y);
+    if (drag == false) rotate(millis()*0.002+x);
+    scale(0.5);
+    translate(-x,-y);
+
     tint(255,(1.0-((5.0-exptimer)*0.2))*255);
     
     if (contains == TYPE_BOMB) image(image_bomb,x+xo,y+yo);
@@ -198,7 +269,7 @@ void setup() {
   points = new ArrayList();
   ents = new ArrayList<Entity>();
   
-  f = loadFont("heinifont-80.vlw");
+  f = loadFont("heinifont-160.vlw");
   
   image_coin = loadImage("coin.png");
   image_bomb = loadImage("bomb.png");
@@ -207,26 +278,42 @@ void setup() {
   image_kisu11 = loadImage("kisu1_1.png");
   image_kisu12 = loadImage("kisu1_2.png");
 
-  smooth();
+  meow = new SoundFile(this, "meow.ogg");
+  pop = new SoundFile(this, "pop.ogg");
+  boom = new SoundFile(this, "boom.ogg");
+  coin = new SoundFile(this, "coin.ogg");
+
   resetGame();
 }
 
+float gamestarttimer = 0.0;
+
 void resetGame() {
   level = 0;
-  points.clear();
-  ents.clear();
-  resetLevel();
+  gamestarttimer = 0.0;
+  game_starttime = millis();
+  game_time = 0;
 }
 
 void resetLevel() {
+  points.clear();
+  ents.clear();
+
+  isdragging1 = false;
+  isdragging2 = false;
+
   if (music != null) music.stop();
-  music = new SoundFile(this, "sport.mp3");
+  if (level == 0) music = new SoundFile(this, "sport.mp3");
+  if (level == 1) music = new SoundFile(this, "hydro.mp3");
+  if (level == 2) music = new SoundFile(this, "nonsense.mp3");
+
   music.play();
   level_time = 0.0;
   next_beat = 0.0;
   level_starttime = millis();
 
   life = 3;
+  paircount = 3.0+float(level);
   frameRate(60);
 }
 
@@ -253,9 +340,19 @@ void touchLogic() {
         }
         
         if (ent.drag) {
-          ent.x = tx;
-          ent.y = ty;
+          if ((ent.dragside == 0 && ent.x < width/2) || (ent.dragside == 1 && ent.x > width/2)) { 
+            if (dist(ent.x,ent.y,tx,ty) > height/6) { 
+              if (ent.dragside == 0) isdragging1 = false;
+              if (ent.dragside == 1) isdragging2 = false;
+              ent.drag = false;
+            }
+            else {
+              ent.x = tx;
+              ent.y = ty;
+            }
+          }
         }
+
       }
       
     }
@@ -365,12 +462,12 @@ void drawBG() {
   dashline(width/2,-32+offy,width/2,height+32+offy,dsh);
 
   dashbox(16,height/2-height/4,80,(height/2+height/4)+4,dsh); 
-  dashbox(width-78-16,height/2-height/4,width-16,(height/2+height/4)+4,dsh);
+  dashbox(width-78-16,height/2-height/4,width-16,(height/2+height/16)+4,dsh);
 
   imageMode(CENTER);
   for (int i = 0; i < 5; i++) {
     if (i >= life) break;
-    image(image_heart,width-56,(height/2-height/4)+64+(i*64),64,64);
+    image(image_heart,width-56,(height/2-height/4)+76+(i*76),76,76);
   }
 
 }
@@ -385,13 +482,14 @@ void drawShapes() {
 
 void drawText() {
       textFont(f);
+
   
   // intro text on level
   if (level_time > 1000. && level_time < 4000.) {
     pushMatrix();
       noStroke();
       textAlign(CENTER,CENTER);
-      textSize(160);
+      textSize(240);
       translate(width/2,height/2);
       scale(1.0+cos(millis()*0.005)*0.1);
       fill(0);
@@ -407,7 +505,7 @@ void drawText() {
     pushMatrix();
       noStroke();
       textAlign(CENTER,CENTER);
-      textSize(160);
+      textSize(240);
       translate(width/2,height/2);
       scale(1.0+cos(millis()*0.005)*0.1);
       fill(0);
@@ -432,6 +530,27 @@ void drawText() {
   popMatrix();
  
 
+  textSize(100);
+  textAlign(CENTER,CENTER);
+  text(int(paircount),80,80);  
+
+
+  // logo
+  if (gamestarttimer >= 0.0 && gamestarttimer < 2.5) {
+    background(255);
+    fill(0);
+    textSize(240);
+    textAlign(CENTER,CENTER);
+    text("NOVEL AMUSEMENTS",width/2,height/2);
+  }
+
+  if (gamestarttimer >= 2.5 && gamestarttimer < 5.0) {
+    background(0);
+    fill(255);
+    textSize(240);
+    textAlign(CENTER,CENTER);
+    text("HALF N HALF",width/2,height/2);
+  }
 }
 
 int spawnside = -1;
@@ -442,6 +561,20 @@ void levelLogic() {
   for(int j=0; j<ents.size(); j++) {
     Entity ent = (Entity) ents.get(j);
     ent.update();
+
+    for(int k=0; k<ents.size(); k++) {
+      Entity ent2 = (Entity) ents.get(k);
+      
+      if (!ent.foundpair && !ent2.foundpair && ent.locked && ent2.locked && dist(ent.x,ent.y,ent2.x,ent2.y) < 100 && ent.alive && ent2.alive && ent.type != ent2.type) {
+        ent.foundpair = true;
+        ent2.foundpair = true;
+        ent.drag = false;
+        ent2.drag = false;
+        meow.play();
+      }
+    }  
+
+
   }  
   
   try {
@@ -463,30 +596,38 @@ void levelLogic() {
     int toporbottom = int(random(0,2));
     
     if (spawnside == 1) {
-      if (toporbottom == 0) ents.add(new Entity(width/8+random(0,width/4),-160+random(0,10),0,2+random(0,2+level),TYPE_BUBBLE,TYPE_BOMB+int(random(0,4))));
-      else ents.add(new Entity(width/8+random(0,width/4),height+120+random(0,10),0,-2-random(0,2+level),TYPE_BUBBLE,TYPE_BOMB+int(random(0,4))));
+      if (toporbottom == 0) ents.add(new Entity(width/8+random(0,width/4),-160+random(0,10),0,2+random(0,2+level),TYPE_BUBBLE,TYPE_BOMB+int(random(0,5))));
+      else ents.add(new Entity(width/8+random(0,width/4),height+120+random(0,10),0,-2-random(0,2+level),TYPE_BUBBLE,TYPE_BOMB+int(random(0,5))));
     } else {
-      if (toporbottom == 0) ents.add(new Entity(width/2+width/4+random(0,width/8),-160+random(0,10),0,2+random(0,2+level),TYPE_BUBBLE,TYPE_BOMB+int(random(0,4))));
-      else ents.add(new Entity(width/2+width/8+random(0,width/4),height+120+random(0,10),0,-2-random(0,2+level),TYPE_BUBBLE,TYPE_BOMB+int(random(0,4))));
+      if (toporbottom == 0) ents.add(new Entity(width/2+width/4+random(0,width/8),-160+random(0,10),0,2+random(0,2+level),TYPE_BUBBLE,TYPE_BOMB+int(random(0,5))));
+      else ents.add(new Entity(width/2+width/8+random(0,width/4),height+120+random(0,10),0,-2-random(0,2+level),TYPE_BUBBLE,TYPE_BOMB+int(random(0,5))));
     }
 
-}
+  }
 }
 
 void draw() {
-  dt = (millis()-level_starttime)-level_time;
+  
+  dt = (millis()-game_starttime)-game_time;
+
+  if (gamestarttimer < 5.0) {
+    drawText();
+    gamestarttimer+=dt*0.00001;
+    return;
+  }
+  
+  if (game_init == 0) { resetLevel(); game_init = 1; }
+  
   if (life >= 0) {
     levelLogic(); 
     touchLogic();
   }
 
-  //  touchEmu();
   drawBG();
   drawShapes();
   drawText();
   
-
-
+  game_time = millis()-game_starttime;
 }
 
 
